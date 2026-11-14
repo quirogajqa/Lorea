@@ -376,7 +376,7 @@ namespace Piccasa
             } catch { /* Cache housekeeping must never prevent launching the viewer. */ }
         }
 
-        static bool NormalizeAndroidVector(string input,string output)
+        internal static bool NormalizeAndroidVector(string input,string output)
         {
             var document=new XmlDocument { XmlResolver=null };
             using(var reader=XmlReader.Create(input,new XmlReaderSettings { DtdProcessing=DtdProcessing.Ignore, XmlResolver=null })) {

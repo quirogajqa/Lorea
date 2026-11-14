@@ -28,6 +28,14 @@ Ejecuta `powershell -ExecutionPolicy Bypass -File .\build.ps1` en esta carpeta. 
 
 `dist/installer/Lorea-Setup.exe` instala para el usuario actual en `%LOCALAPPDATA%/Programs/Lorea`, con acceso directo en Inicio y desinstalador en Panel de control > Programas y características. Registra los formatos de imagen en Abrir con y Aplicaciones predeterminadas, sin cambiar automáticamente la selección del usuario. Al terminar, el instalador ofrece abrir los ajustes de aplicaciones predeterminadas. El desinstalador elimina archivos instalados y registros propios, sin borrar fotografías. El instalador no está firmado.
 
+### Miniaturas SVG en el Explorador
+
+El instalador ofrece **Mostrar miniaturas SVG en el Explorador**. El proveedor se registra solo para el usuario actual y respeta otros proveedores existentes. También puede leer vectores Android guardados con extensión `.svg`. No cambia el programa predeterminado ni incluye panel de vista previa o miniaturas de otros formatos.
+
+La extensión implementa `IInitializeWithStream` e `IThumbnailProvider` y mantiene el aislamiento de miniaturas de Windows: no desactiva `DisableProcessIsolation`. Renderiza con límites de tamaño y tiempo; rechaza archivos inválidos y SVG con scripts o recursos externos. Algunos SVG complejos pueden conservar el icono de archivo. Las miniaturas no son animadas. Al desinstalar se elimina únicamente el registro de miniaturas que todavía pertenezca a Lorea. Puedes desactivarlo ejecutando de nuevo el instalador y desmarcando esa opción.
+
+Si una carpeta sigue mostrando iconos antiguos, pulsa F5 o vuelve a abrirla. En Opciones de carpeta > Ver, **Mostrar siempre iconos, nunca vistas en miniatura** debe estar desmarcado. No se fuerza un reinicio del Explorador.
+
 Para reconstruir: `powershell -ExecutionPolicy Bypass -File .\build-installer.ps1`, con Inno Setup disponible en `tmp/inno/ISCC.exe` o indicando `-Compiler`. Incluye solo el decodificador necesario y sus configuraciones y licencias, no los ejecutables de pruebas.
 
 El instalador incluye `COPYING.txt`, la política de identidad, los avisos de terceros y `source/Lorea-source.zip` con el código propio y scripts correspondientes. Puedes generar el ZIP por separado con `package-source.ps1`. No contiene fotos personales, capturas, grabaciones ni los binarios de las dependencias. Para una publicación, conserva juntos el instalador y el código fuente de esa versión; las dependencias y las obligaciones de sus licencias se revisan por separado.

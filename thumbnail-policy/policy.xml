@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only; Copyright (c) 2026 Lorea contributors -->
+<policymap>
+  <policy domain="delegate" rights="none" pattern="*"/>
+  <policy domain="coder" rights="none" pattern="{HTTP,HTTPS,FTP,URL,EPHEMERAL,MSL,PS,PS2,PS3,EPS,PDF}"/>
+  <policy domain="resource" name="width" value="8192"/>
+  <policy domain="resource" name="height" value="8192"/>
+  <policy domain="resource" name="list-length" value="16"/>
+  <policy domain="resource" name="thread" value="1"/>
+</policymap>

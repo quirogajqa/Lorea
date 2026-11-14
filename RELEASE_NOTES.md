@@ -1,6 +1,18 @@
-# Lorea 0.1.6
+# Lorea 0.1.7
 
-Primera publicación del visor de imágenes Lorea para Windows x64, con código propio bajo GPL-3.0-only.
+## Miniaturas SVG en el Explorador
+
+- Nueva opción de instalación para mostrar el contenido de SVG en lugar del icono del programa.
+- Compatible con SVG normales, declaraciones XML antiguas y vectores Android guardados como `.svg`.
+- Registro por usuario, sin reemplazar proveedores existentes; se retira el registro propio al desinstalar.
+- Procesamiento mediante el aislamiento de miniaturas de Windows, con límites de recursos y tiempo.
+- Pruebas del componente y de la API real del Explorador. Los archivos inválidos o con recursos externos conservan el icono de archivo.
+
+No incluye panel de vista previa ni miniaturas para otros formatos. Si ves iconos en caché, actualiza la carpeta con F5.
+
+## Funciones del visor
+
+Visor de imágenes Lorea para Windows x64, con código propio bajo GPL-3.0-only.
 
 - Vista sobre el escritorio oscurecido y modo ventana.
 - Zoom suave con rueda o teclado, desplazamiento y memoria de vista por foto durante la sesión.
