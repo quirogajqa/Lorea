@@ -1,6 +1,6 @@
 ; SPDX-License-Identifier: GPL-3.0-only
 ; Copyright (c) 2026 Lorea contributors
-#define AppVersion "0.1.7"
+#define AppVersion "0.1.8"
 [Setup]
 AppId={{26C012DA-5431-49E7-9F30-C70390DFD7B1}
 AppName=Lorea

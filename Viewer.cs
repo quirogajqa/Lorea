@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Lorea contributors
 using System;
+using System.Runtime.InteropServices;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -72,7 +73,9 @@ namespace Piccasa
 
         public Viewer() : this(false) { }
 
-        Viewer(bool windowed)
+        Viewer(bool windowed) : this(windowed,IntPtr.Zero) { }
+
+        Viewer(bool windowed,IntPtr targetMonitor)
         {
             this.windowed = windowed;
             Title = "Lorea — Visor";
@@ -91,7 +94,27 @@ namespace Piccasa
                 Height = Math.Min(720, SystemParameters.WorkArea.Height * .9);
                 MinWidth = 420; MinHeight = 300;
                 WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            } else WindowState = WindowState.Maximized;
+            }
+            SourceInitialized += delegate {
+                // Place the native window on its destination monitor before maximizing it.
+                // Monitor rectangles and SetWindowPos use the same native coordinate space.
+                if(targetMonitor!=IntPtr.Zero) {
+                    var monitor=new MonitorInfo { Size=Marshal.SizeOf(typeof(MonitorInfo)) };
+                    if(GetMonitorInfo(targetMonitor,ref monitor)) {
+                        var handle=new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        NativeRect initial;
+                        if(GetWindowRect(handle,out initial)) {
+                            int width=Math.Min(initial.Right-initial.Left,(int)((monitor.Work.Right-monitor.Work.Left)*.8));
+                            int height=Math.Min(initial.Bottom-initial.Top,(int)((monitor.Work.Bottom-monitor.Work.Top)*.9));
+                            int x=monitor.Work.Left+(monitor.Work.Right-monitor.Work.Left-width)/2;
+                            int y=monitor.Work.Top+(monitor.Work.Bottom-monitor.Work.Top-height)/2;
+                            WindowStartupLocation=WindowStartupLocation.Manual;
+                            SetWindowPos(handle,IntPtr.Zero,x,y,width,height,0x14);
+                        }
+                    }
+                }
+                if(!windowed) WindowState=WindowState.Maximized;
+            };
             if (windowed) StateChanged += delegate {
                 if (WindowState == WindowState.Maximized) SwitchViewerMode(false);
             };
@@ -239,7 +262,8 @@ namespace Piccasa
             photo.ReleaseMouseCapture();
             // WPF transparency cannot change after a window is shown.
             // Create a normal native window and retain the loaded image and folder.
-            var next = new Viewer(useWindow);
+            IntPtr monitor=MonitorFromWindow(new System.Windows.Interop.WindowInteropHelper(this).Handle,2);
+            var next = new Viewer(useWindow,monitor);
             next.photoViews = photoViews;
             next.imageCache = imageCache;
             next.thumbnailCache = thumbnailCache;
@@ -255,6 +279,13 @@ namespace Piccasa
             Application.Current.MainWindow = next;
             Close();
         }
+
+        [StructLayout(LayoutKind.Sequential)] struct NativeRect { public int Left,Top,Right,Bottom; }
+        [StructLayout(LayoutKind.Sequential)] struct MonitorInfo { public int Size;public NativeRect Monitor,Work;public uint Flags; }
+        [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr window,uint flags);
+        [DllImport("user32.dll",CharSet=CharSet.Auto)] static extern bool GetMonitorInfo(IntPtr monitor,ref MonitorInfo info);
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window,out NativeRect rectangle);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
 
         Button AddButton(Panel panel, string text, Action action)
         {

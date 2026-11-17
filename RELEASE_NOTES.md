@@ -1,4 +1,8 @@
-# Lorea 0.1.7
+# Lorea 0.1.8
+
+## Corrección de varios monitores
+
+Al mover la ventana a otra pantalla y maximizar, el visor sin bordes permanece en ese monitor. Al volver a ventana también se conserva la pantalla. Verificado con una prueba de integración de dos monitores.
 
 ## Miniaturas SVG en el Explorador
 
