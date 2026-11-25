@@ -1,3 +1,9 @@
+# Lorea 0.1.11
+
+- El botón de encuadre junto a **1:1** centra la foto y la ajusta para verla completa.
+- Al abrir una foto, las miniaturas y las flechas siguen el orden de la carpeta abierta en el Explorador. Si esa vista no está disponible, se usa el orden natural por nombre.
+- Los archivos SVG y SVGZ conservan su fondo transparente al mostrarse en el visor.
+
 # Lorea 0.1.10
 
 - **Actualizaciones** muestra la versión instalada, las notas de la nueva versión y el progreso de descarga. Puedes seguir usando el visor y elegir cuándo instalar.

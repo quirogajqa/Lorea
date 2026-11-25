@@ -222,6 +222,9 @@ namespace Piccasa
             AddButton(bar,"+", delegate { Zoom(1.2); }).ToolTip="Acercar";
             AddButton(bar,"−", delegate { Zoom(1/1.2); }).ToolTip="Alejar";
             AddButton(bar,"1:1", delegate { OriginalSize(); }).ToolTip="Tamaño original";
+            var fitButton=AddButton(bar,"fit", Reset);
+            fitButton.ToolTip="Ajustar imagen a la pantalla (Inicio o 0)";
+            System.Windows.Automation.AutomationProperties.SetName(fitButton,"Ajustar imagen a la pantalla");
             var back=AddButton(bar,"◀", delegate { Navigate(-1); });
             back.Margin=new Thickness(14,0,2,0); back.ToolTip="Foto anterior";
             playButton=AddButton(bar,"▶", delegate { SetPlaying(!slideshowTimer.IsEnabled); });
@@ -314,6 +317,7 @@ namespace Piccasa
             bool filled=false;
             switch(name) {
                 case "close": geometry="M 3,3 L 13,13 M 13,3 L 3,13"; break;
+                case "fit": geometry="M 6,2 L 2,2 L 2,6 M 10,2 L 14,2 L 14,6 M 2,10 L 2,14 L 6,14 M 14,10 L 14,14 L 10,14 M 5,6 L 11,6 L 11,10 L 5,10 Z"; break;
                 case "+": geometry="M 2,8 L 14,8 M 8,2 L 8,14"; break;
                 case "−": geometry="M 2,8 L 14,8"; break;
                 case "◀": geometry="M 12,2 L 3,8 L 12,14 Z"; filled=true; break;
@@ -375,8 +379,9 @@ namespace Piccasa
             if(!extensions.Contains(extension)) throw new IOException("Solo se admiten imágenes.");
             string codec=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"codecs","magick.exe");
             if(!File.Exists(codec)) throw new IOException("Falta la carpeta codecs junto al visor.");
+            bool svg=extension==".svg" || extension==".svgz";
             string key;
-            using(var hash=SHA256.Create()) key=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes("v2"+path+File.GetLastWriteTimeUtc(path).Ticks))).Replace("-","");
+            using(var hash=SHA256.Create()) key=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes((svg ? "v3" : "v2")+path+File.GetLastWriteTimeUtc(path).Ticks))).Replace("-","");
             string folder=Path.Combine(Path.GetTempPath(),"Piccasa-image-cache");
             Directory.CreateDirectory(folder);
             string output=Path.Combine(folder,key+".png");
@@ -388,7 +393,8 @@ namespace Piccasa
                     string input=path;
                     if(extension==".svg" && NormalizeAndroidVector(path,normalized)) input=normalized;
                     var info=new ProcessStartInfo(codec) {
-                        Arguments="-limit memory 256MiB -limit map 512MiB -limit time 30 \""+input+"[0]\" -auto-orient \"PNG:"+temporary+"\"",
+                        Arguments="-limit memory 256MiB -limit map 512MiB -limit time 30 " +
+                            (svg ? "-background none " : "") + "\""+input+"[0]\" -auto-orient \"PNG:"+temporary+"\"",
                         UseShellExecute=false, CreateNoWindow=true, RedirectStandardError=true
                     };
                     using(var process=Process.Start(info)) {
@@ -481,7 +487,9 @@ namespace Piccasa
             try {
                 path=Path.GetFullPath(path);
                 if (!File.Exists(path)) throw new IOException("El archivo no existe o no está disponible.");
-                var candidates=Directory.GetFiles(Path.GetDirectoryName(path)).Where(p => extensions.Contains(Path.GetExtension(p).ToLowerInvariant())).OrderBy(p => p,StringComparer.OrdinalIgnoreCase).ToArray();
+                string directory=Path.GetDirectoryName(path);
+                var candidates=ExplorerFolderOrder.Sort(directory,
+                    Directory.GetFiles(directory).Where(p => extensions.Contains(Path.GetExtension(p).ToLowerInvariant())));
                 int selected=Array.FindIndex(candidates,p => string.Equals(p,path,StringComparison.OrdinalIgnoreCase));
                 if (selected < 0) throw new IOException("Formato de imagen no compatible. PDF y videos no se admiten.");
                 ShowImage(candidates,selected);
@@ -842,6 +850,131 @@ namespace Piccasa
                 if(!e.IsRepeat) DeletePhoto();
             }
             else if (e.Key==Key.O && Keyboard.Modifiers==ModifierKeys.Control) Open();
+        }
+    }
+
+    static class ExplorerFolderOrder
+    {
+        static readonly Guid TopLevelBrowser = new Guid("4C96BE40-915C-11CF-99D3-00AA004AE837");
+        static readonly Guid ShellWindows = new Guid("9BA05972-F6A8-11CF-A442-00A0C90A8F39");
+        const uint AllItemsInViewOrder = 0x80000002;
+        const uint FileSystemPath = 0x80058000;
+
+        internal static string[] Sort(string directory, IEnumerable<string> paths)
+        {
+            var remaining = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
+            var ordered = new List<string>(remaining.Count);
+            foreach (string path in VisiblePaths(directory))
+                if (remaining.Remove(path)) ordered.Add(path);
+            ordered.AddRange(remaining.OrderBy(Path.GetFileName,
+                Comparer<string>.Create((left, right) => StrCmpLogicalW(left, right))));
+            return ordered.ToArray();
+        }
+
+        static List<string> VisiblePaths(string directory)
+        {
+            var ordered = new List<string>();
+            try {
+                dynamic windows = Activator.CreateInstance(Type.GetTypeFromCLSID(ShellWindows, true));
+                int count = windows.Count;
+                for (int i = 0; i < count; i++) {
+                    try {
+                        dynamic window = windows.Item(i);
+                        if (window == null) continue;
+                        Uri location;
+                        if (!Uri.TryCreate((string)window.LocationURL, UriKind.Absolute, out location) ||
+                            !location.IsFile || !SameDirectory(location.LocalPath, directory)) continue;
+                        var provider = (object)window as IShellServiceProvider;
+                        if (provider == null) continue;
+                        Guid service = TopLevelBrowser, browserId = typeof(IShellBrowser).GUID;
+                        object browserObject;
+                        if (provider.QueryService(ref service, ref browserId, out browserObject) < 0) continue;
+
+                        object viewObject, itemsObject;
+                        if (((IShellBrowser)browserObject).QueryActiveShellView(out viewObject) < 0) continue;
+                        var view = viewObject as IFolderView;
+                        Guid itemsId = typeof(IShellItemArray).GUID;
+                        if (view == null || view.Items(AllItemsInViewOrder, ref itemsId, out itemsObject) < 0) continue;
+                        var items = (IShellItemArray)itemsObject;
+                        uint itemCount;
+                        if (items.GetCount(out itemCount) < 0) continue;
+                        for (uint index = 0; index < itemCount; index++) {
+                            IShellItem item;
+                            string path;
+                            if (items.GetItemAt(index, out item) >= 0 && item.GetDisplayName(FileSystemPath, out path) >= 0)
+                                ordered.Add(path);
+                        }
+                        break;
+                    } catch (COMException) { }
+                    catch (InvalidCastException) { }
+                    catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+                }
+            } catch (COMException) { }
+            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+            return ordered;
+        }
+
+        static bool SameDirectory(string left, string right)
+        {
+            return string.Equals(left.TrimEnd('\\', '/'), right.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+        }
+
+        [DllImport("shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        static extern int StrCmpLogicalW(string left, string right);
+
+        [ComImport, Guid("6D5140C1-7436-11CE-8034-00AA006009FA"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellServiceProvider
+        {
+            [PreserveSig] int QueryService(ref Guid service, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object result);
+        }
+
+        [ComImport, Guid("000214E2-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellBrowser
+        {
+            // The first twelve methods are unused IOleWindow and IShellBrowser slots.
+            void GetWindow();
+            void ContextSensitiveHelp();
+            void InsertMenusSB();
+            void SetMenuSB();
+            void RemoveMenusSB();
+            void SetStatusTextSB();
+            void EnableModelessSB();
+            void TranslateAcceleratorSB();
+            void BrowseObject();
+            void GetViewStateStream();
+            void GetControlWindow();
+            void SendControlMsg();
+            [PreserveSig] int QueryActiveShellView([MarshalAs(UnmanagedType.Interface)] out object view);
+        }
+
+        [ComImport, Guid("CDE725B0-CCC9-4519-917E-325D72FAB4CE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IFolderView
+        {
+            void GetCurrentViewMode();
+            void SetCurrentViewMode();
+            void GetFolder();
+            void Item();
+            void ItemCount();
+            [PreserveSig] int Items(uint flags, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object items);
+        }
+
+        [ComImport, Guid("B63EA76D-1F85-456F-A19C-48159EFA858B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellItemArray
+        {
+            void BindToHandler();
+            void GetPropertyStore();
+            void GetPropertyDescriptionList();
+            void GetAttributes();
+            [PreserveSig] int GetCount(out uint count);
+            [PreserveSig] int GetItemAt(uint index, out IShellItem item);
+        }
+
+        [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellItem
+        {
+            void BindToHandler();
+            void GetParent();
+            [PreserveSig] int GetDisplayName(uint kind, [MarshalAs(UnmanagedType.LPWStr)] out string path);
         }
     }
 }
