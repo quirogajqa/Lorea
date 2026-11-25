@@ -28,6 +28,7 @@ namespace Piccasa
         readonly Image previousPhoto = new Image { Stretch=Stretch.Uniform, Margin=new Thickness(12,8,12,4), IsHitTestVisible=false, RenderTransformOrigin=new Point(.5,.5) };
         readonly DispatcherTimer slideshowTimer = new DispatcherTimer { Interval=TimeSpan.FromSeconds(3) };
         Button playButton;
+        UpdatesWindow updatesWindow;
         readonly DispatcherTimer gifTimer=new DispatcherTimer();
         System.Drawing.Image gifImage;
         MemoryStream gifStream;
@@ -129,6 +130,16 @@ namespace Piccasa
             var photoArea = new Grid { ClipToBounds = true, Background = Brushes.Transparent };
             photoArea.Children.Add(photo);
             photoArea.Children.Add(previousPhoto);
+            var photoMenu = new ContextMenu();
+            var copyPhoto = new MenuItem { Header = "Copiar foto" };
+            copyPhoto.Click += delegate { CopyPhoto(); };
+            photoMenu.Items.Add(copyPhoto);
+            photo.ContextMenu = photoMenu;
+            photo.ContextMenuOpening += delegate(object sender, ContextMenuEventArgs e) {
+                CachedPhoto cached;
+                e.Handled = files.Length == 0 || photo.Source == null ||
+                    (imageCache.TryGetValue(files[index], out cached) && cached.Invalid);
+            };
             photoArea.MouseLeftButtonDown += delegate(object sender, MouseButtonEventArgs e) {
                 // Image occupies a layout rectangle larger than its Uniform-rendered bitmap.
                 // Test the actual visible bitmap, including the current pan and zoom.
@@ -222,6 +233,7 @@ namespace Piccasa
             playButton.Template=MakeButtonTemplate(18);
             playButton.ToolTip="Reproducir / Pausar";
             slideshowTimer.Tick += delegate {
+                if(photoMenu.IsOpen) return;
                 if(files.Length<2) { SetPlaying(false); return; }
                 try { Navigate(1,true); }
                 catch(Exception ex) { SetPlaying(false); ShowError(ex); }
@@ -230,6 +242,8 @@ namespace Piccasa
             var rotateLeft=AddButton(bar,"↶", delegate { RotatePhoto(-90); });
             rotateLeft.Margin=new Thickness(14,0,2,0); rotateLeft.ToolTip="Girar a la izquierda (solo vista)";
             AddButton(bar,"↷", delegate { RotatePhoto(90); }).ToolTip="Girar a la derecha (solo vista)";
+            var checkUpdates = AddButton(bar, "Actualizaciones", OpenUpdates);
+            checkUpdates.Margin = new Thickness(10,0,2,0);
             caption.Text = "Abre una foto o arrástrala aquí";
             KeyDown += OnKey;
             MouseWheel += delegate(object s, MouseWheelEventArgs e) { Zoom(e.Delta > 0 ? 1.2 : 1/1.2); };
@@ -690,6 +704,73 @@ namespace Piccasa
             }
             if(slideshowTimer.IsEnabled) SetPlaying(false);
         }
+
+        void CopyPhoto()
+        {
+            var bitmap = photo.Source as BitmapSource;
+            if (bitmap == null) return;
+            try { Clipboard.SetImage(bitmap); }
+            catch (ExternalException ex) {
+                MessageBox.Show(this, ex.Message, "No se pudo copiar la foto", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        void OpenUpdates()
+        {
+            if (updatesWindow != null) {
+                updatesWindow.Activate();
+                return;
+            }
+            updatesWindow = new UpdatesWindow(this);
+            updatesWindow.Closed += delegate { updatesWindow = null; };
+            updatesWindow.Show();
+        }
+
+        void DeletePhoto()
+        {
+            if (files.Length == 0) return;
+            string path = files[index];
+            SetPlaying(false);
+            if (MessageBox.Show(this, "¿Quieres enviar «" + Path.GetFileName(path) + "» a la Papelera de reciclaje?",
+                "Eliminar foto", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
+            try {
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
+                    Microsoft.VisualBasic.FileIO.UIOption.AllDialogs,
+                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin,
+                    Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+            } catch (OperationCanceledException) {
+                return;
+            } catch (Exception ex) {
+                MessageBox.Show(this, ex.Message, "No se pudo eliminar la foto", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var remaining = files.Where((file, position) => position != index).ToArray();
+            imageCache.Remove(path);
+            thumbnailCache.Remove(path);
+            ++thumbnailGeneration;
+            thumbnails.Children.Clear();
+            if (remaining.Length > 0) {
+                ShowImage(remaining, Math.Min(index, remaining.Length - 1));
+                photoViews.Remove(path);
+                return;
+            }
+
+            photoViews.Remove(path);
+            files = remaining;
+            index = 0;
+            detailTimer.Stop();
+            StopGif();
+            previousPhoto.BeginAnimation(UIElement.OpacityProperty, null);
+            photo.BeginAnimation(UIElement.OpacityProperty, null);
+            previousPhoto.Source = photo.Source = null;
+            originalPixelWidth = 0;
+            RestorePhotoView();
+            caption.Text = "Abre una foto o arrástrala aquí";
+            caption.ToolTip = null;
+            Title = "Lorea — Visor";
+        }
         void Reset() {
             scale.BeginAnimation(ScaleTransform.ScaleXProperty,null);
             scale.BeginAnimation(ScaleTransform.ScaleYProperty,null);
@@ -756,6 +837,10 @@ namespace Piccasa
             else if (e.Key==Key.Up) { Zoom(1.10); e.Handled=true; }
             else if (e.Key==Key.Down) { Zoom(1/1.10); e.Handled=true; }
             else if (e.Key==Key.D0 || e.Key==Key.Home) Reset();
+            else if (e.Key==Key.Delete && Keyboard.Modifiers==ModifierKeys.None) {
+                e.Handled=true;
+                if(!e.IsRepeat) DeletePhoto();
+            }
             else if (e.Key==Key.O && Keyboard.Modifiers==ModifierKeys.Control) Open();
         }
     }

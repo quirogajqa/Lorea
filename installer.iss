@@ -1,6 +1,6 @@
 ; SPDX-License-Identifier: GPL-3.0-only
 ; Copyright (c) 2026 Lorea contributors
-#define AppVersion "0.1.8"
+#define AppVersion "0.1.10"
 [Setup]
 AppId={{26C012DA-5431-49E7-9F30-C70390DFD7B1}
 AppName=Lorea
@@ -76,8 +76,9 @@ Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueN
 #include "tmp\associations.iss"
 
 [Run]
-Filename: "{app}\Lorea.exe"; Description: "Abrir Lorea"; Flags: nowait postinstall skipifsilent unchecked
-Filename: "ms-settings:defaultapps?registeredAppUser=Lorea"; Description: "Elegir Lorea como visor predeterminado en Windows"; Flags: shellexec postinstall skipifsilent
+Filename: "{app}\Lorea.exe"; Flags: nowait runasoriginaluser; Check: StartedFromUpdater
+Filename: "{app}\Lorea.exe"; Description: "Abrir Lorea"; Flags: nowait postinstall skipifsilent unchecked; Check: IsRegularSetup
+Filename: "ms-settings:defaultapps?registeredAppUser=Lorea"; Description: "Elegir Lorea como visor predeterminado en Windows"; Flags: shellexec postinstall skipifsilent; Check: IsRegularSetup
 
 [Code]
 const
@@ -86,6 +87,16 @@ const
 
 procedure SHChangeNotify(EventID: Integer; Flags: Cardinal; Item1, Item2: Integer);
   external 'SHChangeNotify@shell32.dll stdcall';
+
+function StartedFromUpdater: Boolean;
+begin
+  Result := ExpandConstant('{param:LOREAUPDATE|0}') = '1';
+end;
+
+function IsRegularSetup: Boolean;
+begin
+  Result := not StartedFromUpdater;
+end;
 
 function HasOtherProvider(Key: String): Boolean;
 var Value: String;

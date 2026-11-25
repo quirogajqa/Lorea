@@ -1,3 +1,10 @@
+# Lorea 0.1.10
+
+- **Actualizaciones** muestra la versión instalada, las notas de la nueva versión y el progreso de descarga. Puedes seguir usando el visor y elegir cuándo instalar.
+- Antes de abrir el instalador, Lorea verifica su SHA-256. Si falla la búsqueda o la descarga, puedes reintentarlo desde la misma ventana.
+- Lorea se vuelve a abrir cuando la instalación termina correctamente.
+- **Copiar foto** en el menú contextual copia la imagen al portapapeles. **Suprimir** pide confirmación antes de enviar la foto abierta a la Papelera.
+
 # Lorea 0.1.8
 
 ## Corrección de varios monitores
